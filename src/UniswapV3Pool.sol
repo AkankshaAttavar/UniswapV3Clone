@@ -2,13 +2,22 @@
 pragma solidity ^0.8.14;
 import "./lib/Tick.sol";
 import "./lib/Position.sol";
+
 interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
+    function transfer(address to, uint256 amount) external returns (bool);
 }
+
 interface IUniswapV3MintCallback {
     function uniswapV3MintCallback(uint256 amount0, uint256 amount1) external;
 }
 
+interface IUniswapV3SwapCallback {
+    function uniswapV3SwapCallback(
+        int256 amount0Delta,
+        int256 amount1Delta
+    ) external;
+}
 // src/UniswapV3Pool.sol
 contract UniswapV3Pool {
     using Tick for mapping(int24 => Tick.Info);
@@ -38,6 +47,15 @@ contract UniswapV3Pool {
         uint128 amount,
         uint256 amount0,
         uint256 amount1
+    );
+    event Swap(
+        address sender,
+        address recipient,
+        int256 amount0,
+        int256 amount1,
+        uint160 sqrtPriceX96,
+        uint128 liquidity,
+        int24 tick
     );
 
     error InvalidTickRange();
@@ -108,6 +126,38 @@ contract UniswapV3Pool {
     }
     // Amount of liquidity, L.
     uint128 public liquidity;
+
+    function swap(
+        address recipient
+    ) public returns (int256 amount0, int256 amount1) {
+        int24 nextTick = 85184;
+        uint160 nextPrice = 5604469350942327889444743441197;
+
+        amount0 = -0.008396714242162444 ether;
+        amount1 = 42 ether;
+
+        (slot0.tick, slot0.sqrtPriceX96) = (nextTick, nextPrice);
+
+        IERC20(token0).transfer(recipient, uint256(-amount0));
+
+        uint256 balance1Before = balance1();
+        IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(
+            amount0,
+            amount1
+        );
+        if (balance1Before + uint256(amount1) < balance1())
+            revert InsufficientInputAmount();
+
+        emit Swap(
+            msg.sender,
+            recipient,
+            amount0,
+            amount1,
+            slot0.sqrtPriceX96,
+            liquidity,
+            slot0.tick
+        );
+    }
 
     // Ticks info
     mapping(int24 => Tick.Info) public ticks;
